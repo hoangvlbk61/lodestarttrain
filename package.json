@@ -5,12 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "build": "tsc && vite build",
     "preview": "vite preview",
-    "format:check": "prettier --check .",
-    "format": "prettier --write .",
-    "knip": "knip"
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css,md}\""
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.31.4",
