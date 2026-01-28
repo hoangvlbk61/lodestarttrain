@@ -48,12 +48,12 @@ export const sidebarData: SidebarData = {
         },
         {
           title: 'Báo cáo tuần',
-          url: '/apps',
+          url: '/report',
           icon: IconReport,
         },
         {
           title: 'Đẩy dữ liệu',
-          url: '/chats',
+          url: '/push-data',
           // badge: '3',
           icon: IconCloudUpload,
         },
