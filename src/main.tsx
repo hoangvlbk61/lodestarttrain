@@ -15,6 +15,8 @@ import { ThemeProvider } from './context/theme-context'
 import './index.css'
 // Generated Routes
 import { routeTree } from './routeTree.gen'
+import { AuthProvider } from './context/auth-context'
+import { useAuth } from './hooks/use-auth'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -82,6 +84,16 @@ declare module '@tanstack/react-router' {
   }
 }
 
+const AuthApp = () => {
+  const auth = useAuth()
+  return (
+    <RouterProvider 
+      router={router} 
+      context={{ auth }} 
+    />
+  )
+}
+
 // Render the app
 const rootElement = document.getElementById('root')!
 if (!rootElement.innerHTML) {
@@ -91,7 +103,10 @@ if (!rootElement.innerHTML) {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider defaultTheme='light' storageKey='vite-ui-theme'>
           <FontProvider>
-            <RouterProvider router={router} />
+            <AuthProvider>
+
+              <AuthApp />
+            </AuthProvider>
           </FontProvider>
         </ThemeProvider>
       </QueryClientProvider>
