@@ -1,0 +1,6 @@
+import { createFileRoute } from '@tanstack/react-router'
+import PushDataPage from '@/features/pushData'
+
+export const Route = createFileRoute('/_authenticated/pushData')({
+  component: PushDataPage,
+})

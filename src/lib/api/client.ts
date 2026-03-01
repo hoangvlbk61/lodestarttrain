@@ -22,14 +22,14 @@ apiClient.interceptors.request.use(
 );
 
 // Response interceptor - handle errors
-apiClient.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Redirect to login
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error.response?.data || error);
-  }
-);
+// apiClient.interceptors.response.use(
+//   (response) => response.data,
+//   (error) => {
+//     if (error.response?.status === 401) {
+//       // Redirect to login
+//       localStorage.removeItem('token');
+//       window.location.href = '/login';
+//     }
+//     return Promise.reject(error.response?.data || error);
+//   }
+// );
