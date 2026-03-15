@@ -17,7 +17,7 @@ export interface AuthState {
   
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  loadUser: () => Promise<void>;
+  loadUser: () => Promise<void | boolean>;
 }
 
 export const useAuth = create<AuthState>((set) => ({
@@ -30,7 +30,7 @@ export const useAuth = create<AuthState>((set) => ({
     set({ isLoading: true });
     try {
       const response = await authApi.login({ username, password });
-      const { token, user } = response;
+      const { token, user } = response.data;
       
       localStorage.setItem('token', token);
       set({ token, user, isAuthenticated: true });
@@ -58,6 +58,7 @@ export const useAuth = create<AuthState>((set) => ({
     try {
       const user = await authApi.getProfile();
       set({ user, isAuthenticated: true });
+      return true
     } catch (error) {
       localStorage.removeItem('token');
       set({ user: null, token: null, isAuthenticated: false });

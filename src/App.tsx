@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link, Outlet } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useAuth } from './lib/hooks/use-auth';
 import { Toaster } from 'sonner';
@@ -21,9 +21,10 @@ import WeeklyReportPage from './pages/reports/weekly';
 import ProfilePage from './pages/settings/profile';
 import ConfigurationPage from './pages/settings/configuration';
 import ChangePasswordPage from './pages/settings/change-password';
+import { Button } from './components/ui/button';
 
 function App() {
-  const { isAuthenticated, isLoading, loadUser } = useAuth();
+  const { isLoading, loadUser } = useAuth();
 
   useEffect(() => {
     loadUser();

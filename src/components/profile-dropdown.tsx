@@ -8,11 +8,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useAuth } from '@/hooks/use-auth'
 
 export function ProfileDropdown() {
+  const { logout } = useAuth();
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
@@ -46,7 +47,7 @@ export function ProfileDropdown() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
+        <DropdownMenuItem onClick={logout}>
           Đăng xuất
         </DropdownMenuItem>
       </DropdownMenuContent>
