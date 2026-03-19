@@ -26,11 +26,11 @@ import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { ThemeSwitch } from '@/components/theme-switch'
-
+import { customerApi } from '@/lib/api/customers'
 export interface CustomerType {
   id?: string;
   name?: string;
-  
+
   // Cau hinh Phe
   phe_de?: string;
   phe_lo?: string;
@@ -41,7 +41,7 @@ export interface CustomerType {
   phe_bc?: string;
 
   // Cau hinh Loai & Ty le
-  type: 'Khach' | 'Chu'; 
+  type: 'Khach' | 'Chu';
   percent?: string;
 
   // Cau hinh tra thuong
