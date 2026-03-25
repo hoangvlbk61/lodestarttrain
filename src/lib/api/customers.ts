@@ -4,7 +4,7 @@ import type { Customer, CreateCustomerData } from '@/types/customer';
 export const customerApi = {
   getAll: async (): Promise<Customer[]> => {
     const response = await apiClient.get('/customers');
-    return response.data;
+    return response.data.data;
   },
 
   getById: async (id: string): Promise<Customer> => {
