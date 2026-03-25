@@ -33,7 +33,7 @@ import type { Customer, CreateCustomerData } from '@/types/customer';
 import { toast } from 'sonner';        // ← import toast từ sonner
 
 // ==================== TYPE CHO FORM ====================
-type CustomerFormData = {
+export type CustomerFormData = {
   customerId: string;
   name: string;
   type: 'customer' | 'agent';
@@ -55,7 +55,7 @@ type CustomerFormData = {
   thuong_bc: string;
 };
 
-const defaultForm: CustomerFormData = {
+export const defaultForm: CustomerFormData = {
   customerId: '',
   name: '',
   type: 'customer',

@@ -11,7 +11,7 @@ import {
   Trophy,
   X,
 } from 'lucide-react'
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { toast } from 'sonner'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -43,6 +43,21 @@ import {
 } from '@/lib/api/calculate'
 import FinalizeResults from '@/components/FinalizeResults';
 // ─── Constants ───────────────────────────────────────────────────────────────
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+
+import { Calendar } from '@/components/ui/calendar';
+import { customerApi } from '@/lib/api/customers';
+import type { Customer } from '@/types/customer';
+
+import { format, isAfter, startOfToday } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import { CalendarIcon } from 'lucide-react';
+import { CustomerFormData, defaultForm as defaultCustomerConfig } from '../customers'
+
 
 const CATEGORY_ORDER = ['de', 'lo', 'xien2', 'xien3', 'xien4'] as const
 const CATEGORY_LABELS: Record<string, string> = {
@@ -73,133 +88,184 @@ function getCategory(bet: ParsedBet): string {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function CalculatePage() {
-  const [inputText, setInputText] = useState('')
-  const [date, setDate] = useState(() => {
-    const d = new Date()
-    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
-  })
+  // ==================== NEW STATE ====================
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  console.log("🚀 ~ CalculatePage ~ selectedCustomer:", selectedCustomer)
+  const [date, setDate] = useState<Date>(new Date());
 
-  const [splitLines, setSplitLines] = useState<string[] | null>(null)
-  const [splitErrors, setSplitErrors] = useState<Set<number>>(new Set())
-  const [parseData, setParseData] = useState<ParseResponse | null>(null)
-  const [finalizeData, setFinalizeData] = useState<FinalizeResponse | null>(null)
+  // ==================== OLD STATES ====================
+  const [inputText, setInputText] = useState('');
+  const [splitLines, setSplitLines] = useState<string[] | null>(null);
+  const [splitErrors, setSplitErrors] = useState<Set<number>>(new Set());
+  const [parseData, setParseData] = useState<ParseResponse | null>(null);
+  const [finalizeData, setFinalizeData] = useState<FinalizeResponse | null>(null);
 
-  const [loadingSplit, setLoadingSplit] = useState(false)
-  const [loadingParse, setLoadingParse] = useState(false)
-  const [loadingFinalize, setLoadingFinalize] = useState(false)
-  const [loadingFetchXS, setLoadingFetchXS] = useState(false)
-  const [completedStep, setCompletedStep] = useState(0)
-  const [showResultDialog, setShowResultDialog] = useState(false)
+  const [loadingSplit, setLoadingSplit] = useState(false);
+  const [loadingParse, setLoadingParse] = useState(false);
+  const [loadingFinalize, setLoadingFinalize] = useState(false);
+  const [loadingFetchXS, setLoadingFetchXS] = useState(false);
+  const [completedStep, setCompletedStep] = useState(0);
+  const [showResultDialog, setShowResultDialog] = useState(false);
 
   const leftPanelRef = useRef<HTMLDivElement>(null)
   const rightPanelRef = useRef<HTMLDivElement>(null)
 
+  const [config, setCalConfig] = useState<CustomerFormData>(defaultCustomerConfig)
+
+  const updateConfig = (key: string, val: string) => {
+    const newCfg = {
+      ...config,
+      [key]: val
+    }
+    setCalConfig(newCfg)
+  }
+  // Load danh sách khách hàng
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        const data = await customerApi.getAll();
+        setCustomers(data);
+      } catch (err) {
+        toast.error('Không tải được danh sách khách hàng');
+      }
+    };
+    loadCustomers();
+  }, []);
+
+  useEffect(() => {
+    let newConfig = {...config};
+    if (selectedCustomer) {
+      const prices = selectedCustomer.prices
+      const rewards = selectedCustomer.rewards
+      if (prices) {
+        const { de, lo, x2, x3, x4, baCang, xiuNhay } = prices;
+        newConfig = {
+          ...newConfig,
+          phe_de: de,
+          phe_lo: lo,
+          phe_x2: x2,
+          phe_x3: x3,
+          phe_x4: x4,
+          phe_xn: baCang,
+          phe_bc: xiuNhay,
+        }
+      }
+      if (rewards) {
+        const { thuongDe, thuongLo, thuongX2, thuongX3, thuongX4 } = rewards;
+        newConfig = {
+          ...newConfig,
+          thuong_de: thuongDe,
+          thuong_lo: thuongLo,
+          thuong_x2: thuongX2,
+          thuong_x3: thuongX3,
+          thuong_x4: thuongX4,
+        }
+      }
+    }
+    setCalConfig(newConfig)
+  }, [selectedCustomer])
+
   // ── Step 1: Tách tin ──
   const handleSplit = useCallback(async () => {
     if (!inputText.trim()) {
-      toast.error('Vui lòng nhập nội dung tin nhắn')
-      return
+      toast.error('Vui lòng nhập nội dung tin nhắn');
+      return;
     }
-    setLoadingSplit(true)
-    setParseData(null)
-    setFinalizeData(null)
-    setSplitErrors(new Set())
+    setLoadingSplit(true);
+    setParseData(null);
+    setFinalizeData(null);
+    setSplitErrors(new Set());
     try {
-      const res = await calculateApi.split(inputText)
-      const { lines } = res.data
-      setSplitLines(lines)
-      setCompletedStep(1)
-      toast.success(`Tách tin thành công: ${lines.length} dòng`)
+      const res = await calculateApi.split(inputText);
+      const { lines } = res.data;
+      setSplitLines(lines);
+      setCompletedStep(1);
+      toast.success(`Tách tin thành công: ${lines.length} dòng`);
     } catch (err: any) {
-      toast.error(err.message || 'Lỗi tách tin')
+      toast.error(err.message || 'Lỗi tách tin');
     } finally {
-      setLoadingSplit(false)
+      setLoadingSplit(false);
     }
-  }, [inputText])
+  }, [inputText]);
 
-  // ── Step 2: Phân tích ──
+  // ── Step 2: Phân tích ── (giữ nguyên)
   const handleParse = useCallback(async () => {
     if (!splitLines || splitLines.length === 0) {
-      toast.error('Chạy Bước 1 trước')
-      return
+      toast.error('Chạy Bước 1 trước');
+      return;
     }
-    setLoadingParse(true)
-    setFinalizeData(null)
+    setLoadingParse(true);
+    setFinalizeData(null);
     try {
-      const res = await calculateApi.parse(splitLines)
-      const data = res.data
-      setParseData(data)
+      const res = await calculateApi.parse(splitLines);
+      const data = res.data;
+      setParseData(data);
 
-      const errorIndices = new Set<number>()
+      const errorIndices = new Set<number>();
       data.parsed.forEach((bet) => {
         if (!bet.isValid && bet.originalLine) {
-          const idx = splitLines.findIndex((l) => l === bet.originalLine)
-          if (idx >= 0) errorIndices.add(idx)
+          const idx = splitLines.findIndex((l) => l === bet.originalLine);
+          if (idx >= 0) errorIndices.add(idx);
         }
-      })
-      setSplitErrors(errorIndices)
-      setCompletedStep(2)
+      });
+      setSplitErrors(errorIndices);
+      setCompletedStep(2);
 
-      const msg = `${data.validBets} hợp lệ / ${data.totalBets} tổng`
+      const msg = `${data.validBets} hợp lệ / ${data.totalBets} tổng`;
       if (data.invalidBets > 0) {
-        toast.warning(`Phân tích xong: ${msg} (${data.invalidBets} lỗi)`)
+        toast.warning(`Phân tích xong: ${msg} (${data.invalidBets} lỗi)`);
       } else {
-        toast.success(`Phân tích thành công: ${msg}`)
+        toast.success(`Phân tích thành công: ${msg}`);
       }
     } catch (err: any) {
-      toast.error(err.message || 'Lỗi phân tích')
+      toast.error(err.message || 'Lỗi phân tích');
     } finally {
-      setLoadingParse(false)
+      setLoadingParse(false);
     }
-  }, [splitLines])
+  }, [splitLines]);
 
-  // ── Step 3: Tính tiền → Dialog ──
+  // ── Step 3: Tính tiền ── (giữ nguyên)
   const handleFinalize = useCallback(async () => {
     if (!parseData?.parsed || parseData.parsed.length === 0) {
-      toast.error('Chạy Bước 2 trước')
-      return
+      toast.error('Chạy Bước 2 trước');
+      return;
     }
-    const dateParts = date.split('/')
-    const dateForApi =
-      dateParts.length === 3
-        ? `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}`
-        : date
+    const dateStr = format(date, 'dd-MM-yyyy');
 
-    setLoadingFinalize(true)
+    setLoadingFinalize(true);
     try {
-      const res = await calculateApi.finalize(parseData.parsed, dateForApi)
-      setFinalizeData(res.data)
-      setCompletedStep(3)
-      setShowResultDialog(true)
-      toast.success(`Tính tiền xong — Trúng ${res.data.totalWin}/${res.data.totalBets}`)
+      const res = await calculateApi.finalize(parseData.parsed, dateStr);
+      setFinalizeData(res.data);
+      setCompletedStep(3);
+      setShowResultDialog(true);
+      toast.success(`Tính tiền xong — Trúng ${res.data.totalWin}/${res.data.totalBets}`);
     } catch (err: any) {
-      toast.error(err.message || 'Lỗi tính tiền')
+      toast.error(err.message || 'Lỗi tính tiền');
     } finally {
-      setLoadingFinalize(false)
+      setLoadingFinalize(false);
     }
-  }, [parseData, date])
+  }, [parseData, date]);
 
-  // ── Cập nhật KQXS ──
   const handleFetchXS = useCallback(async () => {
-    setLoadingFetchXS(true)
+    setLoadingFetchXS(true);
     try {
-      const res = await calculateApi.fetchResults()
-      toast.success(`Cập nhật KQXS thành công — ngày ${res.data?.date || res.data?.time || ''}`)
+      const res = await calculateApi.fetchResults();
+      toast.success(`Cập nhật KQXS thành công`);
     } catch (err: any) {
-      toast.error(err.message || 'Lỗi cập nhật KQXS')
+      toast.error(err.message || 'Lỗi cập nhật KQXS');
     } finally {
-      setLoadingFetchXS(false)
+      setLoadingFetchXS(false);
     }
-  }, [])
+  }, []);
 
-  // ── Reset về đầu ──
   const handleReset = () => {
-    setSplitLines(null)
-    setSplitErrors(new Set())
-    setParseData(null)
-    setFinalizeData(null)
-    setCompletedStep(0)
-  }
+    setSplitLines(null);
+    setSplitErrors(new Set());
+    setParseData(null);
+    setFinalizeData(null);
+    setCompletedStep(0);
+  };
 
   return (
     <>
@@ -217,22 +283,52 @@ export default function CalculatePage() {
         </div>
 
         <div className='space-y-4'>
-          {/* ═══ Configuration Card ═══ */}
+          {/* === CẤU HÌNH === */}
           <Card>
             <CardContent className='pt-6'>
               <div className='grid grid-cols-1 md:grid-cols-4 gap-4 items-end'>
+                {/* Chọn Khách hàng - ĐÃ SỬA */}
                 <div className='space-y-2'>
-                  <Label>Khách hàng mới:</Label>
-                  <Input placeholder='Chọn Khách Hàng' />
+                  <Label>Khách hàng:</Label>
+                  <select
+                    className="w-full border rounded-md p-2.5 focus-visible:ring-indigo-500"
+                    value={selectedCustomer?._id || ''}
+                    onChange={(e) => {
+                      const customer = customers.find(c => c._id === e.target.value);
+                      setSelectedCustomer(customer || null);
+                    }}
+                  >
+                    <option value="">-- Chọn khách hàng --</option>
+                    {customers.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.customerId} - {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+
+                {/* Date Picker - ĐÃ SỬA */}
                 <div className='space-y-2'>
                   <Label>Ngày:</Label>
-                  <Input
-                    type='text'
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(date, 'dd/MM/yyyy')}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={(d) => d && setDate(d)}
+                        disabled={(date) => isAfter(date, startOfToday())}
+                        locale={vi}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
+
                 <div className='flex items-center space-x-4 pb-2'>
                   <RadioGroup defaultValue='nhan' className='flex space-x-2'>
                     <div className='flex items-center space-x-1'>
@@ -245,6 +341,7 @@ export default function CalculatePage() {
                     </div>
                   </RadioGroup>
                 </div>
+
                 <div className='space-y-2'>
                   <Label>Phần trăm(%):</Label>
                   <Input defaultValue='100' />
@@ -254,22 +351,22 @@ export default function CalculatePage() {
               <Separator className='my-4' />
 
               <div className='grid grid-cols-2 md:grid-cols-7 gap-3 mb-3'>
-                <div><Label className='text-xs'>Phế Đề:</Label><Input defaultValue='0.72' /></div>
-                <div><Label className='text-xs'>Lô:</Label><Input defaultValue='21.7' /></div>
-                <div><Label className='text-xs'>X2:</Label><Input defaultValue='0.6' /></div>
-                <div><Label className='text-xs'>X3:</Label><Input defaultValue='0.6' /></div>
-                <div><Label className='text-xs'>X4:</Label><Input defaultValue='0.6' /></div>
-                <div><Label className='text-xs'>BC:</Label><Input defaultValue='0.72' /></div>
-                <div><Label className='text-xs'>XN:</Label><Input defaultValue='1' /></div>
+                <div><Label>Phế Đề</Label><Input value={config.phe_de || '0.72'} onChange={e => updateConfig("phe_de", e.target.value)} /></div>
+                <div><Label>Phế Lô</Label><Input value={config.phe_lo || '21.7'} onChange={e => updateConfig("phe_lo", e.target.value)} /></div>
+                <div><Label>Phế X2</Label><Input value={config.phe_x2 || '0.56'} onChange={e => updateConfig("phe_x2", e.target.value)} /></div>
+                <div><Label>Phế X3</Label><Input value={config.phe_x3 || '0.56'} onChange={e => updateConfig("phe_x3", e.target.value)} /></div>
+                <div><Label>Phế X4</Label><Input value={config.phe_x4 || '0.56'} onChange={e => updateConfig("phe_x4", e.target.value)} /></div>
+                <div><Label>Phế BC</Label><Input value={ '0.72'} onChange={e => updateConfig("phe_bc", e.target.value)} /></div>
+                <div><Label>Phế XN</Label><Input value={ '1.1'} onChange={e => updateConfig("phe_xn", e.target.value)} /></div>
               </div>
 
               <div className='grid grid-cols-2 md:grid-cols-7 gap-3'>
-                <div><Label className='text-xs'>Thưởng Đề:</Label><Input defaultValue='70' /></div>
-                <div><Label className='text-xs'>Lô:</Label><Input defaultValue='80' /></div>
-                <div><Label className='text-xs'>X2:</Label><Input defaultValue='10' /></div>
-                <div><Label className='text-xs'>X3:</Label><Input defaultValue='40' /></div>
-                <div><Label className='text-xs'>X4:</Label><Input defaultValue='100' /></div>
-                <div><Label className='text-xs'>BC:</Label><Input defaultValue='400' /></div>
+                <div><Label className='text-xs'>Thưởng Đề:</Label><Input value={config.thuong_de || '70'} onChange={e => updateConfig("thuong_de", e.target.value)} /></div>
+                <div><Label className='text-xs'>Thưởng Lô:</Label><Input value={config.thuong_lo || '80'} onChange={e => updateConfig("thuong_lo", e.target.value)} /></div>
+                <div><Label className='text-xs'>Thưởng X2:</Label><Input value={config.thuong_x2 || '10'} onChange={e => updateConfig("thuong_x2", e.target.value)} /></div>
+                <div><Label className='text-xs'>Thưởng X3:</Label><Input value={config.thuong_x3 || '40'} onChange={e => updateConfig("thuong_x3", e.target.value)} /></div>
+                <div><Label className='text-xs'>Thưởng X4:</Label><Input value={config.thuong_x4 || '100'} onChange={e => updateConfig("thuong_x4", e.target.value)} /></div>
+                <div><Label className='text-xs'>BC:</Label><Input value='400' /></div>
               </div>
             </CardContent>
           </Card>
@@ -420,11 +517,10 @@ export default function CalculatePage() {
                         return (
                           <div
                             key={i}
-                            className={`flex items-start gap-2 px-2 py-1 rounded ${
-                              hasError
-                                ? 'bg-red-50 dark:bg-red-950/30'
-                                : 'hover:bg-muted/40'
-                            }`}
+                            className={`flex items-start gap-2 px-2 py-1 rounded ${hasError
+                              ? 'bg-red-50 dark:bg-red-950/30'
+                              : 'hover:bg-muted/40'
+                              }`}
                           >
                             <span className='text-muted-foreground text-xs w-5 shrink-0 pt-0.5 text-right'>
                               {i + 1}
@@ -492,11 +588,10 @@ export default function CalculatePage() {
                               {items.map((item, j) => (
                                 <div
                                   key={j}
-                                  className={`flex items-center gap-2 px-2 py-0.5 rounded ${
-                                    !item.isValid
-                                      ? 'bg-red-50 dark:bg-red-950/30'
-                                      : 'hover:bg-muted/30'
-                                  }`}
+                                  className={`flex items-center gap-2 px-2 py-0.5 rounded ${!item.isValid
+                                    ? 'bg-red-50 dark:bg-red-950/30'
+                                    : 'hover:bg-muted/30'
+                                    }`}
                                 >
                                   {item.isValid ? (
                                     <CheckCircle2 className='h-3 w-3 text-green-500 shrink-0' />
@@ -567,137 +662,136 @@ export default function CalculatePage() {
           </DialogHeader>
           {finalizeData && (
             <div className='flex-1 min-h-0 overflow-auto -mx-6 px-6'>
-                <div className='space-y-5 pb-4'>
-             
-                  {/* KQXS tóm tắt */}
-                  <div className='rounded-lg bg-muted/40 p-3 text-sm'>
-                    <div className='flex flex-wrap gap-x-6 gap-y-1'>
-                      <span>
-                        <span className='text-muted-foreground'>Đề (ĐB):</span>{' '}
-                        <span className='font-bold text-lg text-red-600'>
-                          {finalizeData.kqxs.deLast2}
-                        </span>
+              <div className='space-y-5 pb-4'>
+
+                {/* KQXS tóm tắt */}
+                <div className='rounded-lg bg-muted/40 p-3 text-sm'>
+                  <div className='flex flex-wrap gap-x-6 gap-y-1'>
+                    <span>
+                      <span className='text-muted-foreground'>Đề (ĐB):</span>{' '}
+                      <span className='font-bold text-lg text-red-600'>
+                        {finalizeData.kqxs.deLast2}
                       </span>
-                      <span>
-                        <span className='text-muted-foreground'>Lô (2 số cuối):</span>{' '}
-                        <span className='font-mono text-xs'>
-                          {finalizeData.kqxs.allLast2.join(', ')}
-                        </span>
+                    </span>
+                    <span>
+                      <span className='text-muted-foreground'>Lô (2 số cuối):</span>{' '}
+                      <span className='font-mono text-xs'>
+                        {finalizeData.kqxs.allLast2.join(', ')}
                       </span>
-                    </div>
+                    </span>
                   </div>
-             
-                  {/* Danh sách chi tiết các bets */}
-                  {Object.entries(finalizeData.summary).map(([cat, group]) => {
-                    const bets = finalizeData.finalized.filter(
-                      (b) => {
-                        if (b.isDan) {
-                          const danKey = `${b.danType}${b.danValue !== undefined ? ' ' + b.danValue : ''}`;
-                          return `${b.type}_${danKey}` === cat;
-                        }
-                        return b.type === cat;
+                </div>
+
+                {/* Danh sách chi tiết các bets */}
+                {Object.entries(finalizeData.summary).map(([cat, group]) => {
+                  const bets = finalizeData.finalized.filter(
+                    (b) => {
+                      if (b.isDan) {
+                        const danKey = `${b.danType}${b.danValue !== undefined ? ' ' + b.danValue : ''}`;
+                        return `${b.type}_${danKey}` === cat;
                       }
-                    );
-             
-                    const displayLabel = group.isDan 
-                      ? `${group.label} (${group.danType}${group.danValue ? ' ' + group.danValue : ''})`
-                      : group.label;
-             
-                    return (
-                      <div key={cat}>
-                        <div className='flex items-center gap-2 mb-2'>
-                          <Badge
-                            variant={group.totalWin > 0 ? 'default' : 'secondary'}
-                            className={group.totalWin > 0 ? 'bg-red-600' : ''}
-                          >
-                            {displayLabel}
-                          </Badge>
-                          <span className='text-xs text-muted-foreground'>
-                            {group.totalWin > 0 ? (
-                              <span className='text-red-600 font-medium'>
-                                {group.totalWin}
-                              </span>
-                            ) : (
-                              <span>0</span>
-                            )}
-                            /{group.totalBet}
-                          </span>
-                        </div>
-                        <div className='ml-2 space-y-0.5'>
-                          {bets.map((bet, j) => (
-                            <ResultRow key={j} bet={bet} />
-                          ))}
-                        </div>
+                      return b.type === cat;
+                    }
+                  );
+
+                  const displayLabel = group.isDan
+                    ? `${group.label} (${group.danType}${group.danValue ? ' ' + group.danValue : ''})`
+                    : group.label;
+
+                  return (
+                    <div key={cat}>
+                      <div className='flex items-center gap-2 mb-2'>
+                        <Badge
+                          variant={group.totalWin > 0 ? 'default' : 'secondary'}
+                          className={group.totalWin > 0 ? 'bg-red-600' : ''}
+                        >
+                          {displayLabel}
+                        </Badge>
+                        <span className='text-xs text-muted-foreground'>
+                          {group.totalWin > 0 ? (
+                            <span className='text-red-600 font-medium'>
+                              {group.totalWin}
+                            </span>
+                          ) : (
+                            <span>0</span>
+                          )}
+                          /{group.totalBet}
+                        </span>
                       </div>
-                    );
-                  })}
-             
-                  {/* TỔNG KẾT - CHỈ 5 Ô CƠ BẢN */}
-                  <Separator />
-                  <div className='rounded-lg border-2 border-dashed p-4'>
-                    <h4 className='font-semibold mb-3 text-sm'>Tổng kết</h4>
-                    <div className='grid grid-cols-2 sm:grid-cols-3 gap-3'>
-                      {/* Aggregate by base type (de, lo, xien2, xien3, xien4) */}
-                      {(() => {
-                        // Group by base type
-                        const baseTypes = {
-                          de: { label: 'Đề', totalBet: 0, totalWin: 0 },
-                          lo: { label: 'Lô', totalBet: 0, totalWin: 0 },
-                          xien2: { label: 'Xiên 2', totalBet: 0, totalWin: 0 },
-                          xien3: { label: 'Xiên 3', totalBet: 0, totalWin: 0 },
-                          xien4: { label: 'Xiên 4', totalBet: 0, totalWin: 0 },
-                        };
-             
-                        // Aggregate all categories into base types
-                        Object.entries(finalizeData.summary).forEach(([cat, group]) => {
-                          // Determine base type
-                          let baseType = null;
-                          if (cat.startsWith('de_') || cat === 'de') {
-                            baseType = 'de';
-                          } else if (cat.startsWith('lo_') || cat === 'lo') {
-                            baseType = 'lo';
-                          } else if (cat === 'xien2') {
-                            baseType = 'xien2';
-                          } else if (cat === 'xien3') {
-                            baseType = 'xien3';
-                          } else if (cat === 'xien4') {
-                            baseType = 'xien4';
-                          }
-             
-                          if (baseType && baseTypes[baseType]) {
-                            baseTypes[baseType].totalBet += group.totalBet;
-                            baseTypes[baseType].totalWin += group.totalWin;
-                          }
-                        });
-             
-                        // Render only types that have bets
-                        return Object.entries(baseTypes)
-                          .filter(([_, type]) => type.totalBet > 0)
-                          .map(([key, type]) => {
-                            const hasWin = type.totalWin > 0;
-                            return (
-                              <div
-                                key={key}
-                                className={`rounded-md px-3 py-2 text-center text-sm ${
-                                  hasWin
-                                    ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800'
-                                    : 'bg-muted/40 border'
-                                }`}
-                              >
-                                <div className='text-xs text-muted-foreground mb-0.5'>
-                                  {type.label}
-                                </div>
-                                <div className={`text-lg font-bold ${hasWin ? 'text-red-600' : ''}`}>
-                                  {type.totalWin}/{type.totalBet}
-                                </div>
-                              </div>
-                            );
-                          });
-                      })()}
+                      <div className='ml-2 space-y-0.5'>
+                        {bets.map((bet, j) => (
+                          <ResultRow key={j} bet={bet} />
+                        ))}
+                      </div>
                     </div>
+                  );
+                })}
+
+                {/* TỔNG KẾT - CHỈ 5 Ô CƠ BẢN */}
+                <Separator />
+                <div className='rounded-lg border-2 border-dashed p-4'>
+                  <h4 className='font-semibold mb-3 text-sm'>Tổng kết</h4>
+                  <div className='grid grid-cols-2 sm:grid-cols-3 gap-3'>
+                    {/* Aggregate by base type (de, lo, xien2, xien3, xien4) */}
+                    {(() => {
+                      // Group by base type
+                      const baseTypes = {
+                        de: { label: 'Đề', totalBet: 0, totalWin: 0 },
+                        lo: { label: 'Lô', totalBet: 0, totalWin: 0 },
+                        xien2: { label: 'Xiên 2', totalBet: 0, totalWin: 0 },
+                        xien3: { label: 'Xiên 3', totalBet: 0, totalWin: 0 },
+                        xien4: { label: 'Xiên 4', totalBet: 0, totalWin: 0 },
+                      };
+
+                      // Aggregate all categories into base types
+                      Object.entries(finalizeData.summary).forEach(([cat, group]) => {
+                        // Determine base type
+                        let baseType = null;
+                        if (cat.startsWith('de_') || cat === 'de') {
+                          baseType = 'de';
+                        } else if (cat.startsWith('lo_') || cat === 'lo') {
+                          baseType = 'lo';
+                        } else if (cat === 'xien2') {
+                          baseType = 'xien2';
+                        } else if (cat === 'xien3') {
+                          baseType = 'xien3';
+                        } else if (cat === 'xien4') {
+                          baseType = 'xien4';
+                        }
+
+                        if (baseType && baseTypes[baseType]) {
+                          baseTypes[baseType].totalBet += group.totalBet;
+                          baseTypes[baseType].totalWin += group.totalWin;
+                        }
+                      });
+
+                      // Render only types that have bets
+                      return Object.entries(baseTypes)
+                        .filter(([_, type]) => type.totalBet > 0)
+                        .map(([key, type]) => {
+                          const hasWin = type.totalWin > 0;
+                          return (
+                            <div
+                              key={key}
+                              className={`rounded-md px-3 py-2 text-center text-sm ${hasWin
+                                ? 'bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800'
+                                : 'bg-muted/40 border'
+                                }`}
+                            >
+                              <div className='text-xs text-muted-foreground mb-0.5'>
+                                {type.label}
+                              </div>
+                              <div className={`text-lg font-bold ${hasWin ? 'text-red-600' : ''}`}>
+                                {type.totalWin}/{type.totalBet}
+                              </div>
+                            </div>
+                          );
+                        });
+                    })()}
                   </div>
                 </div>
               </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>
@@ -712,9 +806,8 @@ function ResultRow({ bet }: { bet: FinalizedBet }) {
 
   return (
     <div
-      className={`flex items-center gap-2 px-2 py-1 rounded text-sm font-mono ${
-        isWin ? 'bg-red-50 dark:bg-red-950/30' : 'hover:bg-muted/30'
-      }`}
+      className={`flex items-center gap-2 px-2 py-1 rounded text-sm font-mono ${isWin ? 'bg-red-50 dark:bg-red-950/30' : 'hover:bg-muted/30'
+        }`}
     >
       {isWin ? (
         <CheckCircle2 className='h-3.5 w-3.5 text-red-500 shrink-0' />
@@ -737,11 +830,10 @@ function ResultRow({ bet }: { bet: FinalizedBet }) {
           {bet.detail.map((d, i) => (
             <span
               key={i}
-              className={`text-xs px-1 rounded ${
-                d.found
-                  ? 'bg-red-100 dark:bg-red-900/40 text-red-600 font-semibold'
-                  : 'bg-muted text-muted-foreground'
-              }`}
+              className={`text-xs px-1 rounded ${d.found
+                ? 'bg-red-100 dark:bg-red-900/40 text-red-600 font-semibold'
+                : 'bg-muted text-muted-foreground'
+                }`}
             >
               {d.number}
             </span>
