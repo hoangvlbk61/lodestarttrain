@@ -91,7 +91,6 @@ export default function CalculatePage() {
   // ==================== NEW STATE ====================
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  console.log("🚀 ~ CalculatePage ~ selectedCustomer:", selectedCustomer)
   const [date, setDate] = useState<Date>(new Date());
 
   // ==================== OLD STATES ====================
@@ -200,6 +199,18 @@ export default function CalculatePage() {
     try {
       const res = await calculateApi.parse(splitLines);
       const data = res.data;
+      
+      const grouped = data.grouped; 
+      const groupKeys = Object.keys(grouped);
+      const newGrouped = {}; 
+      for(let i = 0; i < groupKeys.length; i ++) {
+        const k = groupKeys[i]; 
+        if(CATEGORY_ORDER.includes(k)) 
+          newGrouped[k] = grouped[k]
+        else if(CATEGORY_ORDER.includes(k.slice(0, 2))) 
+          newGrouped[k.slice(0, 2)] = grouped[k]
+      }
+      data.grouped = newGrouped;
       setParseData(data);
 
       const errorIndices = new Set<number>();
@@ -211,6 +222,7 @@ export default function CalculatePage() {
       });
       setSplitErrors(errorIndices);
       setCompletedStep(2);
+      
 
       const msg = `${data.validBets} hợp lệ / ${data.totalBets} tổng`;
       if (data.invalidBets > 0) {
@@ -731,8 +743,69 @@ export default function CalculatePage() {
                 <Separator />
                 <div className='rounded-lg border-2 border-dashed p-4'>
                   <h4 className='font-semibold mb-3 text-sm'>Tổng kết</h4>
+                
+
+    {/* ==================== TỔNG KẾT TOÀN BỘ ==================== */}
+    {(() => {
+      let grandWin = 0;   // tổng tiền thắng sau khi nhân rate
+      let grandBet = 0;   // tổng tiền cược sau khi nhân rate
+
+      Object.entries(finalizeData.summary).forEach(([cat, group]) => {
+        let baseType = null;
+        if (cat.startsWith('de_') || cat === 'de') baseType = 'de';
+        else if (cat.startsWith('lo_') || cat === 'lo') baseType = 'lo';
+        else if (cat === 'xien2') baseType = 'xien2';
+        else if (cat === 'xien3') baseType = 'xien3';
+        else if (cat === 'xien4') baseType = 'xien4';
+
+        if (baseType) {
+          const bet = group.totalBet || 0;
+          const win = group.totalWin || 0;
+
+          let wrate = 1;
+          let lrate = 1;
+
+          switch (baseType) {
+            case 'de':
+              wrate = parseFloat(config.thuong_de || '1');
+              lrate = parseFloat(config.phe_de || '1');
+              break;
+            case 'lo':
+              wrate = parseFloat(config.thuong_lo || '1');
+              lrate = parseFloat(config.phe_lo || '1');
+              break;
+            case 'xien2':
+              wrate = parseFloat(config.thuong_x2 || '1');
+              lrate = parseFloat(config.phe_x2 || '1');
+              break;
+            case 'xien3':
+              wrate = parseFloat(config.thuong_x3 || '1');
+              lrate = parseFloat(config.phe_x3 || '1');
+              break;
+            case 'xien4':
+              wrate = parseFloat(config.thuong_x4 || '1');
+              lrate = parseFloat(config.phe_x4 || '1');
+              break;
+          }
+
+          grandWin += win * wrate;
+          grandBet += bet * lrate;
+        }
+      });
+
+      const isWin = grandWin > grandBet;
+
+      return (
+        <div className={`px-4 mb-4 py-1.5 rounded-full text-sm font-bold border ${isWin
+          ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-950/30 dark:border-red-800'
+          : 'bg-green-50 text-green-600 border-green-200 dark:bg-green-950/30 dark:border-green-800'
+        }`}>
+          Tổng: {Math.round(grandWin)} / {Math.round(grandBet)}
+        </div>
+      );
+    })()}
                   <div className='grid grid-cols-2 sm:grid-cols-3 gap-3'>
-                    {/* Aggregate by base type (de, lo, xien2, xien3, xien4) */}
+                    
                     {(() => {
                       // Group by base type
                       const baseTypes = {
@@ -763,12 +836,39 @@ export default function CalculatePage() {
                           baseTypes[baseType].totalBet += group.totalBet;
                           baseTypes[baseType].totalWin += group.totalWin;
                         }
+                        switch(baseType) {
+                          case "de": {
+                            baseTypes[baseType].wrate = parseFloat(config.thuong_de);
+                            baseTypes[baseType].lrate = parseFloat(config.phe_de);
+                            break;
+                          }
+                          case "lo": {
+                            baseTypes[baseType].wrate = parseFloat(config.thuong_lo);
+                            baseTypes[baseType].lrate = parseFloat(config.phe_lo);
+                            break;
+                          }
+                          case "xien2": {
+                            baseTypes[baseType].wrate = parseFloat(config.thuong_x2);
+                            baseTypes[baseType].lrate = parseFloat(config.phe_x2);
+                            break;
+                          }
+                          case "xien3": {
+                            baseTypes[baseType].wrate = parseFloat(config.thuong_x3);
+                            baseTypes[baseType].lrate = parseFloat(config.phe_x3);
+                            break;
+                          }
+                          case "xien4": {
+                            baseTypes[baseType].wrate = parseFloat(config.thuong_x4);
+                            baseTypes[baseType].lrate = parseFloat(config.phe_x4);
+                            break;
+                          }
+                        } 
                       });
-
                       // Render only types that have bets
                       return Object.entries(baseTypes)
                         .filter(([_, type]) => type.totalBet > 0)
                         .map(([key, type]) => {
+                          console.log("baseTypes ~ kid type:", type)
                           const hasWin = type.totalWin > 0;
                           return (
                             <div
@@ -782,7 +882,7 @@ export default function CalculatePage() {
                                 {type.label}
                               </div>
                               <div className={`text-lg font-bold ${hasWin ? 'text-red-600' : ''}`}>
-                                {type.totalWin}/{type.totalBet}
+                                {(type.totalWin * type.wrate).toFixed(0)}/{(type.totalBet * type.lrate) .toFixed(0)}
                               </div>
                             </div>
                           );
